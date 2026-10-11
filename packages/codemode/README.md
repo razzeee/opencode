@@ -182,6 +182,16 @@ The synchronous `search(...)` built-in is always available. It supports exact-pa
 empty-query browsing, and pagination, and returns callable paths with full signatures. Search counts toward
 `maxToolCalls`. Search also matches descriptions from enclosing `Namespace` values.
 
+Each result's `path` is a JavaScript expression to copy into a later Code Mode program, not a property name to look up
+dynamically. For example, if a result contains `tools["my-mcp"].list_pages`, call that expression directly:
+
+```js
+return await tools["my-mcp"].list_pages({})
+```
+
+Do not write `tools[result.path](...)`: `result.path` already includes the `tools` namespace and the complete path to
+the callable. Code Mode does not evaluate path strings as JavaScript.
+
 ## Execution Limits
 
 | Limit            | Default   | Controls                        |

@@ -2208,6 +2208,10 @@ class Frame<R> {
       if (typeof key !== "string") {
         throw typeError("Tool paths must use string property names.", propertyNode)
       }
+      if (objectValue.path.length === 0 && (key.startsWith("tools.") || key.startsWith("tools["))) {
+        const expressionPath = this.ctx.tools.pathFromExpression(key)
+        if (expressionPath !== undefined) return new ToolReference(expressionPath)
+      }
       return new ToolReference([...objectValue.path, key])
     }
 

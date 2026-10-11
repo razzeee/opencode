@@ -372,6 +372,7 @@ export class ToolRuntimeError extends Error {
 export type ToolRuntime<R = never> = {
   readonly calls: Array<ToolCall>
   readonly hooks: Hooks<R>
+  readonly pathFromExpression: (expression: string) => ReadonlyArray<string> | undefined
   readonly execute: (
     path: ReadonlyArray<string>,
     args: Array<Json | undefined>,
@@ -443,6 +444,12 @@ export const make = <R>(
   return {
     calls,
     hooks,
+    pathFromExpression: (expression) => {
+      const match = prepared.searchIndex.find(
+        (entry) => toolExpression(entry.description.path) === expression,
+      )
+      return match?.description.path.split(".")
+    },
     keys: (path) => namespaceKeys(root, path),
     search: (args) => Effect.suspend(() => executeTool("search", makeSearchTool(prepared.searchIndex), args)),
     execute: (path, args) =>

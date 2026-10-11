@@ -102,6 +102,27 @@ describe("callable namespaces", () => {
     expect((exact as { items: Array<{ path: string }> }).items.map((item) => item.path)).toEqual(["tools.issues.list"])
   })
 
+  test("a search result path can be used as a dynamic tools key", async () => {
+    expect(
+      await value(
+        runtime,
+        `const path = search({ query: "tools.issues.list" }).items[0].path; return await tools[path]({})`,
+      ),
+    ).toBe("list")
+  })
+
+  test("a search result path with bracket notation can be used as a dynamic tools key", async () => {
+    const mcp = CodeMode.make({
+      tools: { "my-mcp": { link_pull_request: echo("Link a pull request", "linked") } },
+    })
+    expect(
+      await value(
+        mcp,
+        `const path = search({ query: "link pull request" }).items[0].path; return await tools[path]({})`,
+      ),
+    ).toBe("linked")
+  })
+
   test("an unknown child under a callable tool is an UnknownTool error", async () => {
     const diagnostic = await failure(runtime, `return await tools.issues.missing({})`)
     expect(diagnostic.kind).toBe("UnknownTool")

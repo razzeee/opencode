@@ -1,5 +1,6 @@
 import type { ModelInfo, SessionMessageAssistant } from "@opencode/client"
 import { TextAttributes } from "@opentui/core"
+import { openUrl } from "@opencode/util/open"
 import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { useData } from "../context/data"
 import { Keymap } from "../context/keymap"
@@ -40,8 +41,9 @@ export function useUsageLimits() {
     return value ? modelUsage(value, model, providers().get(model.providerID)) : undefined
   }
   return {
-    /** Undefined until loaded, and null when the location isn't signed in to OpenCode Console. */
+    /** Undefined until loaded, and null when no supported subscription is connected. */
     info,
+    failed: () => data.location.usage.failed(ref()),
     load: (refresh = false) => {
       if (refresh) data.location.usage.invalidate(ref())
       void data.location.usage.sync(ref()).catch(() => undefined)
@@ -90,24 +92,55 @@ export function DialogUsage() {
 
   return (
     <Switch>
-      <Match when={limits.info()?.workspace}>
+      <Match when={limits.info()}>
         {(info) => (
           <DialogSelect
             title="Usage"
             description={[
-              info().name ? `Workspace: ${info().name}` : undefined,
+              info().workspace?.name ? `Workspace: ${info().workspace?.name}` : undefined,
               rows().length > 0 ? `Resets ${formatReset(resets())}` : undefined,
             ]
               .filter(Boolean)
               .join(" · ")}
-            placeholder="Search models"
-            options={rows().map((row) => ({
-              title: row.model.name,
-              value: key(row.model),
-              footer: selected() === key(row.model) ? `${formatDollars(row.usage.left)} left` : undefined,
-              footerColor: row.level === "out" || row.level === "reached" ? theme.text.feedback.error.base : undefined,
-              onSelect: () => dialog.replace(() => <DialogUsageModel model={row.model} />),
-            }))}
+            placeholder="Search usage"
+            options={[
+              ...rows().map((row) => ({
+                title: row.model.name,
+                value: key(row.model),
+                footer: selected() === key(row.model) ? `${formatDollars(row.usage.left)} left` : undefined,
+                footerColor:
+                  row.level === "out" || row.level === "reached" ? theme.text.feedback.error.base : undefined,
+                onSelect: () => dialog.replace(() => <DialogUsageModel model={row.model} />),
+              })),
+              ...info().allowances.flatMap((allowance) => [
+                ...allowance.windows.map((window) => {
+                  const seconds = window.windowSeconds
+                  const duration = !seconds
+                    ? window.id
+                    : seconds % 86400 === 0
+                      ? `${seconds / 86400}d`
+                      : seconds % 3600 === 0
+                        ? `${seconds / 3600}h`
+                        : `${Math.round(seconds / 60)}m`
+                  return {
+                    title: [allowance.name, window.name, duration].filter(Boolean).join(" · "),
+                    value: `quota:${allowance.providerID}:${window.id}`,
+                    footer: `${Math.round(window.percent)}% used`,
+                    footerColor: window.limited ? theme.text.feedback.error.base : undefined,
+                    details: [`Resets ${formatReset(window.resetsAt)}`],
+                  }
+                }),
+                ...(allowance.usageURL
+                  ? [
+                      {
+                        title: `View ${allowance.name} usage`,
+                        value: `usage:${allowance.providerID}`,
+                        onSelect: () => void openUrl(allowance.usageURL!).catch(() => undefined),
+                      },
+                    ]
+                  : []),
+              ]),
+            ]}
             onMove={(option) => setActive(option.value)}
             emptyView={
               <box paddingLeft={DIALOG_LIST_INSET} paddingRight={DIALOG_LIST_INSET}>
@@ -119,16 +152,18 @@ export function DialogUsage() {
           />
         )}
       </Match>
-      <Match when={limits.info() !== undefined}>
+      <Match when={limits.info() === null}>
         <DialogLayout header={<DialogHeader title="Usage" />}>
           <text fg={theme.text.muted} wrapMode="word">
-            Sign in to OpenCode Console with /connect to see your workspace's usage limits.
+            No usage limits available. Connect a supported account with /connect.
           </text>
         </DialogLayout>
       </Match>
       <Match when={true}>
         <DialogLayout header={<DialogHeader title="Usage" />}>
-          <text fg={theme.text.muted}>Loading…</text>
+          <text fg={theme.text.muted}>
+            {limits.failed() ? "Usage could not be loaded. Reopen /usage to retry." : "Loading…"}
+          </text>
         </DialogLayout>
       </Match>
     </Switch>
@@ -218,7 +253,7 @@ export function useUsageAlerts(sessionID: () => string) {
   const limits = useUsageLimits()
   onCleanup(
     data.on("session.execution.succeeded", (event) => {
-      if (event.data.sessionID === sessionID() && limits.info()) limits.load(true)
+      if (event.data.sessionID === sessionID() && limits.info()?.workspace) limits.load(true)
     }),
   )
   createEffect(() => {

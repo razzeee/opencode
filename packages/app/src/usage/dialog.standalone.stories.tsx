@@ -107,6 +107,41 @@ export default {
 
 export const Default = { render: () => <UsageStory info={info([anthropic(123.14), pool(394.57)], "available")} /> }
 
+export const Codex = {
+  render: () => (
+    <UsageStory
+      info={{
+        budgets: [],
+        allowances: [
+          {
+            providerID: "openai",
+            name: "OpenAI",
+            plan: "plus",
+            windows: [
+              {
+                id: "reviews-primary",
+                name: "Reviews",
+                windowSeconds: 18000,
+                percent: 37,
+                limited: false,
+                resetsAt: Date.now() + hour,
+              },
+              {
+                id: "reviews-secondary",
+                name: "Reviews",
+                windowSeconds: 604800,
+                percent: 100,
+                limited: true,
+                resetsAt: Date.now() + 24 * hour,
+              },
+            ],
+          },
+        ],
+      }}
+    />
+  ),
+}
+
 export const SignedOut = {
   render: () => (
     <DialogStoryRuntime>

@@ -11,8 +11,8 @@ import {
 } from "./machine"
 
 const limits = (name: string): UsageLimitsInfo => ({
-  allowances: [],
   workspace: { id: `wrk_${name}`, name, usageURL: `https://opencode.ai/wrk_${name}/activity/overview` },
+  allowances: [],
   budgets: [],
 })
 
@@ -64,7 +64,18 @@ describe("usage dialog machine", () => {
     expect(transitionUsageDialog(loading, { type: "cache.synced", key: KEY, limits: undefined }).state).toBe(loading)
 
     const ready = replay([{ type: "load.succeeded", attempt: 1, outcome: { kind: "limits", info: limitsA } }]).state
-    expect(transitionUsageDialog(ready, { type: "cache.synced", key: KEY, limits: undefined }).state).toBe(ready)
+    const switched = transitionUsageDialog(ready, { type: "location.changed", key: "account-b", cached: undefined })
+    expect(selectUsageDialogView(switched.state)).toEqual({ status: "loading" })
+    expect(
+      selectUsageDialogView(
+        transitionUsageDialog(switched.state, {
+          type: "cache.synced",
+          key: "account-b",
+          limits: undefined,
+          failed: true,
+        }).state,
+      ),
+    ).toEqual({ status: "failed" })
 
     const signedOut = transitionUsageDialog(ready, { type: "cache.synced", key: KEY, limits: null }).state
     expect(selectUsageDialogView(signedOut)).toEqual({ status: "signed-out" })
